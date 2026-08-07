@@ -1,0 +1,56 @@
+name: Bug report
+description: 报告鼠标或触控板滚动问题
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: 感谢反馈。请填写以下信息，方便复现问题。
+  - type: input
+    id: macos
+    attributes:
+      label: macOS 版本与芯片
+      placeholder: macOS 26.0 / Apple M3
+    validations:
+      required: true
+  - type: input
+    id: uu-version
+    attributes:
+      label: UU 远程版本
+      placeholder: 4.35.0
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: 输入设备
+      placeholder: Logitech MX Master 3S / MacBook 触控板
+    validations:
+      required: true
+  - type: dropdown
+    id: symptom
+    attributes:
+      label: 问题类型
+      options:
+        - 鼠标方向错误
+        - 鼠标速度异常
+        - 鼠标无响应
+        - 触控板方向错误
+        - 触控板速度异常
+        - 安装或权限问题
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: 复现步骤与实际表现
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 相关日志
+      description: 请先确认日志中没有个人敏感信息。
+      render: shell
