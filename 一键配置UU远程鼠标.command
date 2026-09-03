@@ -7,6 +7,11 @@ AGENT_TEMPLATE="$SCRIPT_DIR/com.user.uuremote.mos.plist"
 TRACKPAD_SOURCE="$SCRIPT_DIR/UUTrackpadFix.swift"
 TRACKPAD_INFO="$SCRIPT_DIR/UUTrackpadFix-Info.plist"
 TRACKPAD_AGENT_TEMPLATE="$SCRIPT_DIR/com.user.uuremote.trackpadfix.plist"
+SETTINGS_SOURCE="$SCRIPT_DIR/UURemoteScrollSettings.app.src/UURemoteScrollSettings.swift"
+SETTINGS_INFO="$SCRIPT_DIR/UURemoteScrollSettings.app.src/Info.plist"
+SETTINGS_RULE_WINDOWS="$SCRIPT_DIR/UURemoteScrollSettings.app.src/uuremote-mos-rules-windows.json"
+SETTINGS_RULE_MAC="$SCRIPT_DIR/UURemoteScrollSettings.app.src/uuremote-mos-rules-mac.json"
+SETTINGS_APP="/Applications/UURemoteScrollSettings.app"
 MOS_APP="/Applications/Mos.app"
 UU_APP="/Applications/UURemote.app"
 TRACKPAD_APP="/Applications/UUTrackpadFix.app"
@@ -64,6 +69,10 @@ fail() {
 [[ -f "$TRACKPAD_SOURCE" ]] || fail "缺少触控板调速器源码：$TRACKPAD_SOURCE"
 [[ -f "$TRACKPAD_INFO" ]] || fail "缺少触控板调速器信息文件：$TRACKPAD_INFO"
 [[ -f "$TRACKPAD_AGENT_TEMPLATE" ]] || fail "缺少触控板后台启动文件：$TRACKPAD_AGENT_TEMPLATE"
+[[ -f "$SETTINGS_SOURCE" ]] || fail "缺少设置应用源码：$SETTINGS_SOURCE"
+[[ -f "$SETTINGS_INFO" ]] || fail "缺少设置应用信息文件：$SETTINGS_INFO"
+[[ -f "$SETTINGS_RULE_WINDOWS" ]] || fail "缺少 Windows 模式规则：$SETTINGS_RULE_WINDOWS"
+[[ -f "$SETTINGS_RULE_MAC" ]] || fail "缺少 Mac 模式规则：$SETTINGS_RULE_MAC"
 
 current_version=""
 if [[ -d "$MOS_APP" ]]; then
@@ -142,6 +151,24 @@ fi
 /bin/mv "$trackpad_build" "$TRACKPAD_APP" || fail "无法安装触控板调速器。"
 log "UU 触控板调速器安装完成（倍率 0.18，方向反转）"
 
+log "构建 UU 远程鼠标设置应用"
+settings_build="$TASK_TEMP/UURemoteScrollSettings.app"
+/bin/mkdir -p "$settings_build/Contents/MacOS" "$settings_build/Contents/Resources"
+/bin/cp "$SETTINGS_INFO" "$settings_build/Contents/Info.plist"
+/bin/cp "$SETTINGS_RULE_WINDOWS" "$settings_build/Contents/Resources/uuremote-mos-rules-windows.json"
+/bin/cp "$SETTINGS_RULE_MAC" "$settings_build/Contents/Resources/uuremote-mos-rules-mac.json"
+/bin/chmod 644 "$settings_build/Contents/Resources/"*.json
+xcrun swiftc -parse-as-library -O -framework SwiftUI -framework AppKit "$SETTINGS_SOURCE" -o "$settings_build/Contents/MacOS/UURemoteScrollSettings"
+/usr/bin/xattr -cr "$settings_build"
+/usr/bin/codesign --force --deep --sign - "$settings_build"
+/usr/bin/codesign --verify --deep --strict "$settings_build" || fail "设置应用签名失败。"
+if [[ -d "$SETTINGS_APP" ]]; then
+  settings_backup="/Applications/UURemoteScrollSettings Backup $(date '+%Y%m%d-%H%M%S').app"
+  /bin/mv "$SETTINGS_APP" "$settings_backup" || fail "无法备份旧版设置应用。"
+fi
+/bin/mv "$settings_build" "$SETTINGS_APP" || fail "无法安装设置应用。"
+log "UU 远程鼠标设置应用安装完成：$SETTINGS_APP"
+
 log "备份并写入滚动配置"
 preferences_file="$HOME/Library/Preferences/com.caldis.Mos.plist"
 if [[ -f "$preferences_file" ]]; then
@@ -155,10 +182,10 @@ launchctl bootout "gui/$USER_ID/$LAUNCH_LABEL" 2>/dev/null || true
 
 rule_hex="$(/usr/bin/xxd -p -c 1000000 "$RULE_FILE")"
 
-# macOS 原始鼠标方向关闭；Mos 为本机应用反转回来，同时提供丝滑滚动。
-defaults write NSGlobalDomain com.apple.swipescrolldirection -bool false
+# 保留 macOS“自然滚动”；本机普通应用由 Mos 做方向补偿，保持自然滚动手感。
+defaults write NSGlobalDomain com.apple.swipescrolldirection -bool true
 
-# Mos 全局配置：所有普通应用启用丝滑和方向补偿。
+# Mos 全局配置：普通应用启用丝滑滚动，并通过方向补偿保持自然滚动手感。
 defaults write com.caldis.Mos allowlist -bool false
 defaults write com.caldis.Mos applications -data "$rule_hex"
 defaults write com.caldis.Mos hideStatusItem -bool false
@@ -194,9 +221,10 @@ trackpad_job_state="$(launchctl print "gui/$USER_ID/$TRACKPAD_LAUNCH_LABEL" 2>/d
 
 echo
 echo "配置完成："
-echo "  • 本机普通应用：Mos 丝滑滚动 + 熟悉的滚轮方向"
-echo "  • UU 鼠标：匹配真实进程，使用兼容的原始滚轮事件并单独反转方向"
-echo "  • UU 触控板：仅在 UU 窗口内反转连续滚动，并缩放为 0.18"
+echo "  • 本机普通应用：自然滚动手感 + Mos 丝滑滚动和方向补偿"
+echo "  • UU 鼠标：仅发往 Windows 远程桌面时单独反转方向"
+echo "  • UU 触控板：仅在 UU 窗口内反转连续滚动，并缩放为 0.18（不影响本机）"
+echo "  • 设置应用：$SETTINGS_APP，可在 Mac 控制 Mac / Windows 之间一键切换"
 echo "  • Mos：$installed_version，已设置登录后自动运行"
 echo
 echo "首次安装时，如果 macOS 弹出辅助功能权限，请允许以下两项："

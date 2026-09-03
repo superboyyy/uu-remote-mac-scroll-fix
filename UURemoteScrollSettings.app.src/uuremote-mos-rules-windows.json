@@ -1,0 +1,68 @@
+[
+  {
+    "path": "/Applications/UURemote.app",
+    "displayName": "UU远程",
+    "inherit": false,
+    "scroll": {
+      "smooth": false,
+      "reverse": true,
+      "reverseVertical": true,
+      "reverseHorizontal": true,
+      "dash": null,
+      "toggle": null,
+      "block": null,
+      "step": 8.0,
+      "speed": 1.0,
+      "duration": 4.2,
+      "deadZone": 1.0,
+      "smoothSimTrackpad": false,
+      "smoothVertical": false,
+      "smoothHorizontal": false,
+      "durationBeforeSimTrackpadLock": null
+    }
+  },
+  {
+    "path": "/Applications/UURemote.app/Contents/MacOS/UURemote",
+    "displayName": "UU远程主进程",
+    "inherit": false,
+    "scroll": {
+      "smooth": false,
+      "reverse": true,
+      "reverseVertical": true,
+      "reverseHorizontal": true,
+      "dash": null,
+      "toggle": null,
+      "block": null,
+      "step": 8.0,
+      "speed": 1.0,
+      "duration": 4.2,
+      "deadZone": 1.0,
+      "smoothSimTrackpad": false,
+      "smoothVertical": false,
+      "smoothHorizontal": false,
+      "durationBeforeSimTrackpadLock": null
+    }
+  },
+  {
+    "path": "/Applications/UURemote.app/Contents/Helpers/UURemoteServer",
+    "displayName": "UU远程服务进程",
+    "inherit": false,
+    "scroll": {
+      "smooth": false,
+      "reverse": true,
+      "reverseVertical": true,
+      "reverseHorizontal": true,
+      "dash": null,
+      "toggle": null,
+      "block": null,
+      "step": 8.0,
+      "speed": 1.0,
+      "duration": 4.2,
+      "deadZone": 1.0,
+      "smoothSimTrackpad": false,
+      "smoothVertical": false,
+      "smoothHorizontal": false,
+      "durationBeforeSimTrackpadLock": null
+    }
+  }
+]

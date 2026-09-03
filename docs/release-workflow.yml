@@ -1,0 +1,38 @@
+name: Release macOS App
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build UURemoteScrollSettings.app
+        run: ./build-app.command
+
+      - name: Package app
+        run: |
+          cd build
+          /usr/bin/ditto -c -k --keepParent UURemoteScrollSettings.app UURemoteScrollSettings-macOS.zip
+          shasum -a 256 UURemoteScrollSettings-macOS.zip > UURemoteScrollSettings-macOS.zip.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: UURemoteScrollSettings-macOS
+          path: |
+            build/UURemoteScrollSettings-macOS.zip
+            build/UURemoteScrollSettings-macOS.zip.sha256
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/UURemoteScrollSettings-macOS.zip
+            build/UURemoteScrollSettings-macOS.zip.sha256
