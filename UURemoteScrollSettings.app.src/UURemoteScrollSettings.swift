@@ -19,9 +19,9 @@ enum RemoteMode: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .windows:
-            return "本机保持自然滚动；Windows 远程桌面使用 Windows 习惯的反向滚动。"
+            return "本机保持自然滚动；鼠标滚轮适配 Windows 方向，触控板与本机同向。"
         case .mac:
-            return "本机保持自然滚动；Mac 远程桌面与本地保持同向自然滚动。"
+            return "本机保持自然滚动；远程 Mac 的鼠标与触控板均与本机同向。"
         case .off:
             return "保留本机自然滚动；停止 UU 远程专用方向修正和触控板调速。"
         }
@@ -144,7 +144,7 @@ final class AppModel: ObservableObject {
         let mosRunning = (try? readAgentRunning(label: mosAgent)) ?? false
 
         let mode: RemoteMode?
-        if remoteReverse && trackpadReverse && trackpadRunning {
+        if remoteReverse && !trackpadReverse && trackpadRunning {
             mode = .windows
         } else if !remoteReverse && !trackpadReverse && trackpadRunning {
             mode = .mac
@@ -200,8 +200,9 @@ final class AppModel: ObservableObject {
             guard FileManager.default.fileExists(atPath: "/Applications/UUTrackpadFix.app") else {
                 throw AppError.trackpadFixMissing
             }
-            let reverse = mode == .windows ? "1" : "0"
-            _ = try runCommand("/usr/libexec/PlistBuddy", ["-c", "Set :EnvironmentVariables:UU_TRACKPAD_REVERSE \(reverse)", trackpadPlist])
+            // Windows 与 Mac 模式均保持触控板与本机自然滚动同向；
+            // 只有鼠标滚轮按目标系统习惯区分方向。
+            _ = try runCommand("/usr/libexec/PlistBuddy", ["-c", "Set :EnvironmentVariables:UU_TRACKPAD_REVERSE 0", trackpadPlist])
             try restartAgent(label: trackpadAgent, plistPath: trackpadPlist)
         case .off:
             stopAgent(label: trackpadAgent)

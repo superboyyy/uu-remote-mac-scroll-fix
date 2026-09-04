@@ -149,7 +149,7 @@ if [[ -d "$TRACKPAD_APP" ]]; then
   /bin/mv "$TRACKPAD_APP" "$trackpad_backup" || fail "无法备份旧版触控板调速器。"
 fi
 /bin/mv "$trackpad_build" "$TRACKPAD_APP" || fail "无法安装触控板调速器。"
-log "UU 触控板调速器安装完成（倍率 0.18，方向反转）"
+log "UU 触控板调速器安装完成（倍率 0.18，方向与本机一致）"
 
 log "构建 UU 远程鼠标设置应用"
 settings_build="$TASK_TEMP/UURemoteScrollSettings.app"
@@ -223,7 +223,7 @@ echo
 echo "配置完成："
 echo "  • 本机普通应用：自然滚动手感 + Mos 丝滑滚动和方向补偿"
 echo "  • UU 鼠标：仅发往 Windows 远程桌面时单独反转方向"
-echo "  • UU 触控板：仅在 UU 窗口内反转连续滚动，并缩放为 0.18（不影响本机）"
+echo "  • UU 触控板：仅在 UU 窗口内缩放连续滚动，方向与本机自然滚动一致（不影响本机）"
 echo "  • 设置应用：$SETTINGS_APP，可在 Mac 控制 Mac / Windows 之间一键切换"
 echo "  • Mos：$installed_version，已设置登录后自动运行"
 echo

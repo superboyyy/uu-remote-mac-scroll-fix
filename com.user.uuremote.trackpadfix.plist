@@ -13,7 +13,7 @@
         <key>UU_TRACKPAD_SCALE</key>
         <string>0.18</string>
         <key>UU_TRACKPAD_REVERSE</key>
-        <string>1</string>
+        <string>0</string>
     </dict>
     <key>RunAtLoad</key>
     <true/>
