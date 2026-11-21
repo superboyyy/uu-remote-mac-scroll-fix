@@ -1,45 +1,42 @@
 #!/bin/zsh
+# 一键安装：Mos（缺失或过旧时）+ UUTrackpadFix + 设置应用，然后启用一个远程模式。
+# 用法：./一键配置UU远程鼠标.command [windows|mac|off]
+#       不带参数时沿用上次选择的模式；首次安装默认 windows。
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-RULE_FILE="$SCRIPT_DIR/uuremote-mos-rules.json"
-AGENT_TEMPLATE="$SCRIPT_DIR/com.user.uuremote.mos.plist"
-TRACKPAD_SOURCE="$SCRIPT_DIR/UUTrackpadFix.swift"
-TRACKPAD_INFO="$SCRIPT_DIR/UUTrackpadFix-Info.plist"
-TRACKPAD_AGENT_TEMPLATE="$SCRIPT_DIR/com.user.uuremote.trackpadfix.plist"
-SETTINGS_SOURCE="$SCRIPT_DIR/UURemoteScrollSettings.app.src/UURemoteScrollSettings.swift"
-SETTINGS_INFO="$SCRIPT_DIR/UURemoteScrollSettings.app.src/Info.plist"
-SETTINGS_RULE_WINDOWS="$SCRIPT_DIR/UURemoteScrollSettings.app.src/uuremote-mos-rules-windows.json"
-SETTINGS_RULE_MAC="$SCRIPT_DIR/UURemoteScrollSettings.app.src/uuremote-mos-rules-mac.json"
+BUILD_SCRIPT="$SCRIPT_DIR/build-app.command"
 SETTINGS_APP="/Applications/UURemoteScrollSettings.app"
+SETTINGS_BIN="$SETTINGS_APP/Contents/MacOS/UURemoteScrollSettings"
+TRACKPAD_APP="/Applications/UUTrackpadFix.app"
 MOS_APP="/Applications/Mos.app"
 UU_APP="/Applications/UURemote.app"
-TRACKPAD_APP="/Applications/UUTrackpadFix.app"
+# 需要的最低 Mos 版本；本机没有 Mos 或版本更旧时安装这一版。
 MOS_VERSION="4.2.1"
 MOS_ASSET="Mos.Versions.4.2.1-20260531.1.zip"
 MOS_SIZE="12127893"
 MOS_SHA256="2ea69e96f092e44dada93a55bda1cddab3329c527bbd5f06e00dfb78e953960a"
 MOS_TEAM_ID="N7Z52F27XK"
-LAUNCH_LABEL="com.user.uuremote.mos"
-LAUNCH_AGENT="$HOME/Library/LaunchAgents/$LAUNCH_LABEL.plist"
 TRACKPAD_LAUNCH_LABEL="com.user.uuremote.trackpadfix"
-TRACKPAD_LAUNCH_AGENT="$HOME/Library/LaunchAgents/$TRACKPAD_LAUNCH_LABEL.plist"
+BACKUP_DIR="$HOME/Library/Application Support/UURemoteScrollSettings/旧版应用备份"
 USER_ID="$(id -u)"
-TASK_TEMP="$(/usr/bin/mktemp -d /tmp/uuremote-mos-setup.XXXXXX)"
+MODE="${1:-default}"
+TASK_TEMP="$(/usr/bin/mktemp -d /tmp/uuremote-setup.XXXXXX)"
+
+autoload -Uz is-at-least
 
 cleanup() {
-  if [[ "$TASK_TEMP" == /tmp/uuremote-mos-setup.* && -d "$TASK_TEMP" ]]; then
-    /usr/bin/find "$TASK_TEMP" -depth -delete 2>/dev/null || true
+  if [[ "$TASK_TEMP" == /tmp/uuremote-setup.* && -d "$TASK_TEMP" ]]; then
+    /bin/rm -rf "$TASK_TEMP"
   fi
 }
 
 pause_on_exit() {
   echo
   if [[ -t 0 ]]; then
-    read -k 1 "?按任意键关闭窗口..."
+    read -k 1 "?按任意键关闭窗口..." || true
   fi
 }
-trap pause_on_exit INT TERM
 
 finish() {
   exit_status=$?
@@ -47,10 +44,13 @@ finish() {
   if (( exit_status != 0 )); then
     echo
     echo "脚本异常结束，错误码：$exit_status" >&2
-    pause_on_exit
   fi
+  pause_on_exit
 }
 trap finish EXIT
+# Ctrl-C 或被终止时直接退出，不再继续执行后面的步骤。
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 log() {
   echo "[$(date '+%H:%M:%S')] $*"
@@ -62,26 +62,34 @@ fail() {
   exit 1
 }
 
+case "$MODE" in
+  windows|mac|off|default) ;;
+  *) fail "未知模式：$MODE（可选 windows / mac / off）" ;;
+esac
+
 [[ "$(uname -s)" == "Darwin" ]] || fail "此脚本只能在 macOS 上运行。"
 [[ -d "$UU_APP" ]] || fail "未找到 $UU_APP，请先安装 UU 远程。"
-[[ -f "$RULE_FILE" ]] || fail "缺少配置文件：$RULE_FILE"
-[[ -f "$AGENT_TEMPLATE" ]] || fail "缺少后台启动文件：$AGENT_TEMPLATE"
-[[ -f "$TRACKPAD_SOURCE" ]] || fail "缺少触控板调速器源码：$TRACKPAD_SOURCE"
-[[ -f "$TRACKPAD_INFO" ]] || fail "缺少触控板调速器信息文件：$TRACKPAD_INFO"
-[[ -f "$TRACKPAD_AGENT_TEMPLATE" ]] || fail "缺少触控板后台启动文件：$TRACKPAD_AGENT_TEMPLATE"
-[[ -f "$SETTINGS_SOURCE" ]] || fail "缺少设置应用源码：$SETTINGS_SOURCE"
-[[ -f "$SETTINGS_INFO" ]] || fail "缺少设置应用信息文件：$SETTINGS_INFO"
-[[ -f "$SETTINGS_RULE_WINDOWS" ]] || fail "缺少 Windows 模式规则：$SETTINGS_RULE_WINDOWS"
-[[ -f "$SETTINGS_RULE_MAC" ]] || fail "缺少 Mac 模式规则：$SETTINGS_RULE_MAC"
+[[ -x "$BUILD_SCRIPT" ]] || fail "缺少构建脚本：$BUILD_SCRIPT"
+[[ -w /Applications ]] || fail "当前用户没有 /Applications 的写入权限，请使用管理员账户运行。"
 
+if ! xcrun --find swiftc >/dev/null 2>&1; then
+  xcode-select --install 2>/dev/null || true
+  fail "此 Mac 尚未安装 Apple 命令行开发工具。系统已尝试打开安装窗口，安装完成后请再次运行脚本。"
+fi
+
+# ---------- Mos ----------
 current_version=""
 if [[ -d "$MOS_APP" ]]; then
   current_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$MOS_APP/Contents/Info.plist" 2>/dev/null || true)"
 fi
 
-if [[ "$current_version" != "$MOS_VERSION" ]]; then
+# 只在缺失或版本过旧时安装；已有更新的版本不会被降级。
+if [[ -n "$current_version" ]] && is-at-least "$MOS_VERSION" "$current_version"; then
+  log "已安装 Mos $current_version，跳过"
+else
   log "准备安装 Mos $MOS_VERSION"
   official_url="https://github.com/Caldis/Mos/releases/download/$MOS_VERSION/$MOS_ASSET"
+  # 镜像只用于加速；无论走哪条线路，文件都必须通过下面的大小、哈希和签名校验。
   download_urls=(
     "$official_url"
     "https://ghfast.top/$official_url"
@@ -115,123 +123,65 @@ if [[ "$current_version" != "$MOS_VERSION" ]]; then
   team_id="$(/usr/bin/codesign -dv --verbose=2 "$new_app" 2>&1 | /usr/bin/awk -F= '/TeamIdentifier=/{print $2}')"
   [[ "$team_id" == "$MOS_TEAM_ID" ]] || fail "Mos 开发者签名不匹配。"
 
-  /usr/bin/osascript -e 'tell application "Mos" to quit' 2>/dev/null || true
+  # 旧版本曾用后台任务守护 Mos，不先卸载的话 Mos 退出后会被立刻拉起。
+  launchctl bootout "gui/$USER_ID/com.user.uuremote.mos" 2>/dev/null || true
+  /usr/bin/pkill -x Mos 2>/dev/null || true
   /bin/sleep 1
   if [[ -d "$MOS_APP" ]]; then
-    backup_version="${current_version:-unknown}"
-    backup_path="/Applications/Mos ${backup_version} Backup $(date '+%Y%m%d-%H%M%S').app"
+    /bin/mkdir -p "$BACKUP_DIR"
+    backup_path="$BACKUP_DIR/Mos ${current_version:-unknown} $(date '+%Y%m%d-%H%M%S').app"
     /bin/mv "$MOS_APP" "$backup_path" || fail "无法备份旧版 Mos。"
-    log "旧版已备份到 $backup_path"
+    log "旧版 Mos 已移到 $backup_path"
   fi
   /bin/mv "$new_app" "$MOS_APP" || fail "无法把 Mos 安装到 /Applications。"
   log "Mos $MOS_VERSION 安装完成"
+fi
+
+# ---------- 构建 ----------
+log "从源码构建设置应用和触控板调速器"
+# 构建输出只在失败时显示，避免编译器的提示刷屏。
+if ! "$BUILD_SCRIPT" "$TASK_TEMP/build" >"$TASK_TEMP/build.log" 2>&1; then
+  /bin/cat "$TASK_TEMP/build.log" >&2
+  fail "构建失败。"
+fi
+new_settings="$TASK_TEMP/build/UURemoteScrollSettings.app"
+new_trackpad="$TASK_TEMP/build/UUTrackpadFix.app"
+
+# ---------- 触控板调速器 ----------
+# 临时签名的应用每次重新编译都会让辅助功能授权失效，所以源码没变就保留已安装的那份。
+new_fingerprint="$(/bin/cat "$new_trackpad/Contents/Resources/source.sha256")"
+installed_fingerprint="$(/bin/cat "$TRACKPAD_APP/Contents/Resources/source.sha256" 2>/dev/null || true)"
+trackpad_replaced=0
+if [[ -n "$installed_fingerprint" && "$installed_fingerprint" == "$new_fingerprint" ]] \
+   && /usr/bin/codesign --verify --deep --strict "$TRACKPAD_APP" 2>/dev/null; then
+  log "触控板调速器源码未变化，保留已安装的版本（辅助功能授权继续有效）"
 else
-  log "Mos 已是指定版本 $MOS_VERSION"
+  launchctl bootout "gui/$USER_ID/$TRACKPAD_LAUNCH_LABEL" 2>/dev/null || true
+  /bin/rm -rf "$TRACKPAD_APP"
+  /bin/mv "$new_trackpad" "$TRACKPAD_APP" || fail "无法安装触控板调速器。"
+  trackpad_replaced=1
+  log "触控板调速器安装完成：$TRACKPAD_APP"
 fi
 
-log "构建 UU 触控板专用调速器"
-swift_compiler="$(xcrun --find swiftc 2>/dev/null || true)"
-if [[ -z "$swift_compiler" ]]; then
-  xcode-select --install 2>/dev/null || true
-  fail "此 Mac 尚未安装 Apple 命令行开发工具。系统已尝试打开安装窗口，安装完成后请再次运行脚本。"
-fi
+# ---------- 设置应用 ----------
+/usr/bin/pkill -x UURemoteScrollSettings 2>/dev/null || true
+/bin/rm -rf "$SETTINGS_APP"
+/bin/mv "$new_settings" "$SETTINGS_APP" || fail "无法安装设置应用。"
+log "设置应用安装完成：$SETTINGS_APP"
 
-trackpad_build="$TASK_TEMP/UUTrackpadFix.app"
-/bin/mkdir -p "$trackpad_build/Contents/MacOS"
-/bin/cp "$TRACKPAD_INFO" "$trackpad_build/Contents/Info.plist"
-xcrun swiftc -O -framework Cocoa -framework ApplicationServices "$TRACKPAD_SOURCE" -o "$trackpad_build/Contents/MacOS/UUTrackpadFix"
-/usr/bin/codesign --force --deep --sign - "$trackpad_build"
-/usr/bin/codesign --verify --deep --strict "$trackpad_build" || fail "触控板调速器签名失败。"
-
-launchctl bootout "gui/$USER_ID/$TRACKPAD_LAUNCH_LABEL" 2>/dev/null || true
-if [[ -d "$TRACKPAD_APP" ]]; then
-  trackpad_backup="/Applications/UUTrackpadFix Backup $(date '+%Y%m%d-%H%M%S').app"
-  /bin/mv "$TRACKPAD_APP" "$trackpad_backup" || fail "无法备份旧版触控板调速器。"
-fi
-/bin/mv "$trackpad_build" "$TRACKPAD_APP" || fail "无法安装触控板调速器。"
-log "UU 触控板调速器安装完成（倍率 0.18，方向与本机一致）"
-
-log "构建 UU 远程鼠标设置应用"
-settings_build="$TASK_TEMP/UURemoteScrollSettings.app"
-/bin/mkdir -p "$settings_build/Contents/MacOS" "$settings_build/Contents/Resources"
-/bin/cp "$SETTINGS_INFO" "$settings_build/Contents/Info.plist"
-/bin/cp "$SETTINGS_RULE_WINDOWS" "$settings_build/Contents/Resources/uuremote-mos-rules-windows.json"
-/bin/cp "$SETTINGS_RULE_MAC" "$settings_build/Contents/Resources/uuremote-mos-rules-mac.json"
-/bin/chmod 644 "$settings_build/Contents/Resources/"*.json
-xcrun swiftc -parse-as-library -O -framework SwiftUI -framework AppKit "$SETTINGS_SOURCE" -o "$settings_build/Contents/MacOS/UURemoteScrollSettings"
-/usr/bin/xattr -cr "$settings_build"
-/usr/bin/codesign --force --deep --sign - "$settings_build"
-/usr/bin/codesign --verify --deep --strict "$settings_build" || fail "设置应用签名失败。"
-if [[ -d "$SETTINGS_APP" ]]; then
-  settings_backup="/Applications/UURemoteScrollSettings Backup $(date '+%Y%m%d-%H%M%S').app"
-  /bin/mv "$SETTINGS_APP" "$settings_backup" || fail "无法备份旧版设置应用。"
-fi
-/bin/mv "$settings_build" "$SETTINGS_APP" || fail "无法安装设置应用。"
-log "UU 远程鼠标设置应用安装完成：$SETTINGS_APP"
-
-log "备份并写入滚动配置"
-preferences_file="$HOME/Library/Preferences/com.caldis.Mos.plist"
-if [[ -f "$preferences_file" ]]; then
-  /bin/cp -p "$preferences_file" "$preferences_file.backup-$(date '+%Y%m%d-%H%M%S')"
-fi
-
-launchctl bootout "gui/$USER_ID/com.codex.mos.runtime" 2>/dev/null || true
-launchctl bootout "gui/$USER_ID/$LAUNCH_LABEL" 2>/dev/null || true
-/usr/bin/osascript -e 'tell application "Mos" to quit' 2>/dev/null || true
-/bin/sleep 1
-
-rule_hex="$(/usr/bin/xxd -p -c 1000000 "$RULE_FILE")"
-
-# 保留 macOS“自然滚动”；本机普通应用由 Mos 做方向补偿，保持自然滚动手感。
-defaults write NSGlobalDomain com.apple.swipescrolldirection -bool true
-
-# Mos 全局配置：普通应用启用丝滑滚动，并通过方向补偿保持自然滚动手感。
-defaults write com.caldis.Mos allowlist -bool false
-defaults write com.caldis.Mos applications -data "$rule_hex"
-defaults write com.caldis.Mos hideStatusItem -bool false
-defaults write com.caldis.Mos smooth -bool true
-defaults write com.caldis.Mos smoothVertical -bool true
-defaults write com.caldis.Mos smoothHorizontal -bool true
-defaults write com.caldis.Mos smoothSimTrackpad -bool false
-defaults write com.caldis.Mos reverse -bool true
-defaults write com.caldis.Mos reverseVertical -bool true
-defaults write com.caldis.Mos reverseHorizontal -bool true
-defaults write com.caldis.Mos step -float 36.00965073529412
-defaults write com.caldis.Mos speed -float 4.874310661764706
-defaults write com.caldis.Mos duration -float 3.9
-defaults write com.caldis.Mos deadZone -float 1.0
-
-/bin/mkdir -p "$HOME/Library/LaunchAgents"
-/bin/cp "$AGENT_TEMPLATE" "$LAUNCH_AGENT"
-/bin/cp "$TRACKPAD_AGENT_TEMPLATE" "$TRACKPAD_LAUNCH_AGENT"
-/usr/bin/plutil -lint "$LAUNCH_AGENT" >/dev/null || fail "后台启动文件格式错误。"
-/usr/bin/plutil -lint "$TRACKPAD_LAUNCH_AGENT" >/dev/null || fail "触控板后台启动文件格式错误。"
-launchctl bootstrap "gui/$USER_ID" "$LAUNCH_AGENT" || fail "无法启动 Mos 后台任务。"
-launchctl bootstrap "gui/$USER_ID" "$TRACKPAD_LAUNCH_AGENT" || fail "无法启动触控板后台任务。"
-launchctl kickstart -k "gui/$USER_ID/$LAUNCH_LABEL"
-launchctl kickstart -k "gui/$USER_ID/$TRACKPAD_LAUNCH_LABEL"
-/bin/sleep 3
-
-installed_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$MOS_APP/Contents/Info.plist")"
-job_state="$(launchctl print "gui/$USER_ID/$LAUNCH_LABEL" 2>/dev/null | /usr/bin/awk -F'= ' '/^[[:space:]]*state =/{print $2; exit}')"
-trackpad_job_state="$(launchctl print "gui/$USER_ID/$TRACKPAD_LAUNCH_LABEL" 2>/dev/null | /usr/bin/awk -F'= ' '/^[[:space:]]*state =/{print $2; exit}')"
-[[ "$installed_version" == "$MOS_VERSION" ]] || fail "安装后的版本校验失败。"
-[[ "$job_state" == "running" ]] || fail "Mos 后台进程未正常运行。"
-[[ "$trackpad_job_state" == "running" ]] || fail "触控板调速进程未正常运行。"
+# ---------- 启用模式 ----------
+# 规则写入、Mos 重启、后台任务都交给设置应用，和在界面里点模式卡片走的是同一套逻辑。
+log "启用远程模式"
+echo
+"$SETTINGS_BIN" --apply "$MODE" || fail "启用模式失败，详见上方提示。"
 
 echo
-echo "配置完成："
-echo "  • 本机普通应用：自然滚动手感 + Mos 丝滑滚动和方向补偿"
-echo "  • UU 鼠标：仅发往 Windows 远程桌面时单独反转方向"
-echo "  • UU 触控板：仅在 UU 窗口内缩放连续滚动，方向与本机自然滚动一致（不影响本机）"
-echo "  • 设置应用：$SETTINGS_APP，可在 Mac 控制 Mac / Windows 之间一键切换"
-echo "  • Mos：$installed_version，已设置登录后自动运行"
-echo
-echo "首次安装时，如果 macOS 弹出辅助功能权限，请允许以下两项："
-echo "  1. Mos"
-echo "  2. UU远程触控板调速器"
-echo "路径：系统设置 → 隐私与安全性 → 辅助功能"
-echo
-if [[ -t 0 ]]; then
-  read -k 1 "?按任意键关闭窗口..."
+echo "安装完成。"
+echo "  • 设置应用：$SETTINGS_APP（切换模式、调整触控板速度）"
+echo "  • Mos 的开机自启：请在 Mos 偏好设置 → 通用 中开启“登录时启动”"
+if (( trackpad_replaced )); then
+  echo
+  echo "触控板调速器是新安装或已更新的，需要重新授权辅助功能："
+  echo "  系统设置 → 隐私与安全性 → 辅助功能 → 打开“UU远程触控板调速器”"
+  echo "  如果列表里已有旧条目但不生效，请先用“−”删除它再重新添加。"
 fi

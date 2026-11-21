@@ -7,10 +7,22 @@ private let configuredScale: Double = {
           let number = Double(value) else { return 0.18 }
     return min(max(number, 0.05), 1.0)
 }()
-private let shouldReverse = ProcessInfo.processInfo.environment["UU_TRACKPAD_REVERSE"] != "0"
+// 默认不反转方向；只有显式设置 UU_TRACKPAD_REVERSE=1 时才反转。
+private let shouldReverse = ProcessInfo.processInfo.environment["UU_TRACKPAD_REVERSE"] == "1"
 private var eventScale: Double { shouldReverse ? -configuredScale : configuredScale }
 
-private var targetCache: [pid_t: Bool] = [:]
+// 事件监听句柄。回调里需要用它在监听被系统停用后重新启用。
+private var eventTap: CFMachPort?
+
+// 进程是否属于 UU 远程的判断结果只缓存几秒，避免 PID 被其他进程复用后误判。
+private struct TargetCacheEntry {
+    let matched: Bool
+    let checkedAt: CFAbsoluteTime
+}
+private let targetCacheLifetime: CFAbsoluteTime = 5
+private let targetCacheLimit = 64
+private var targetCache: [pid_t: TargetCacheEntry] = [:]
+
 private var verticalResidual = 0.0
 private var horizontalResidual = 0.0
 
@@ -22,16 +34,23 @@ private func log(_ message: String) {
 private func isUURemoteTarget(_ event: CGEvent) -> Bool {
     let pid = pid_t(event.getIntegerValueField(.eventTargetUnixProcessID))
     guard pid > 1 else { return false }
-    if let cached = targetCache[pid] { return cached }
 
-    guard let app = NSRunningApplication(processIdentifier: pid) else {
-        targetCache[pid] = false
-        return false
+    let now = CFAbsoluteTimeGetCurrent()
+    if let cached = targetCache[pid], now - cached.checkedAt < targetCacheLifetime {
+        return cached.matched
     }
-    let bundleMatch = app.bundleIdentifier == targetBundleIdentifier
-    let pathMatch = app.executableURL?.path.contains("/UURemote.app/") == true
-    let matched = bundleMatch || pathMatch
-    targetCache[pid] = matched
+
+    var matched = false
+    if let app = NSRunningApplication(processIdentifier: pid) {
+        let bundleMatch = app.bundleIdentifier == targetBundleIdentifier
+        let pathMatch = app.executableURL?.path.contains("/UURemote.app/") == true
+        matched = bundleMatch || pathMatch
+    }
+
+    if targetCache.count >= targetCacheLimit {
+        targetCache.removeAll(keepingCapacity: true)
+    }
+    targetCache[pid] = TargetCacheEntry(matched: matched, checkedAt: now)
     return matched
 }
 
@@ -55,6 +74,7 @@ private func scaleAxis(
     fixed: CGEventField,
     residual: inout Double
 ) {
+    // 先读出三个值再写回：写入整数行增量会让系统重算另外两个字段。
     let deltaValue = event.getIntegerValueField(delta)
     let pointValue = event.getDoubleValueField(point)
     let fixedValue = event.getDoubleValueField(fixed)
@@ -64,8 +84,13 @@ private func scaleAxis(
     event.setDoubleValueField(fixed, value: fixedValue * eventScale)
 }
 
-private let eventCallback: CGEventTapCallBack = { proxy, type, event, _ in
+private let eventCallback: CGEventTapCallBack = { _, type, event, _ in
+    // 回调超时或用户输入保护会让系统停用监听；不重新启用的话调速会静默失效。
     if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+        if let tap = eventTap {
+            CGEvent.tapEnable(tap: tap, enable: true)
+            log("事件监听被系统停用，已重新启用")
+        }
         return Unmanaged.passUnretained(event)
     }
     guard type == .scrollWheel,
@@ -94,7 +119,7 @@ private let eventCallback: CGEventTapCallBack = { proxy, type, event, _ in
 let promptOptions = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
 _ = AXIsProcessTrustedWithOptions(promptOptions)
 
-var eventTap: CFMachPort?
+var announcedWaiting = false
 while eventTap == nil {
     eventTap = CGEvent.tapCreate(
         tap: .cgAnnotatedSessionEventTap,
@@ -105,7 +130,11 @@ while eventTap == nil {
         userInfo: nil
     )
     if eventTap == nil {
-        log("等待辅助功能权限；请在系统设置中允许 UU远程触控板调速器")
+        // 只提示一次，避免等待授权期间把日志写满。
+        if !announcedWaiting {
+            log("等待辅助功能权限；请在系统设置中允许 UU远程触控板调速器")
+            announcedWaiting = true
+        }
         Thread.sleep(forTimeInterval: 2.0)
     }
 }

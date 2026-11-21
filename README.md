@@ -10,31 +10,19 @@
 
 ## 支持的远程模式
 
-| 模式 | Mac 本机 | UU 远程端 | 适用场景 |
+| 模式 | UU 窗口内鼠标滚轮 | UU 窗口内触控板 | 适用场景 |
 |---|---|---|---|
-| **Mac 控制 Windows** | 保持自然滚动手感 | 鼠标滚轮单独反向；触控板与本机同向 | Mac 作为主控端连接 Windows |
-| **Mac 控制 Mac** | 保持自然滚动手感 | 与本机同向，保持远程 Mac 自然滚动 | Mac 作为主控端连接另一台 Mac |
-| **关闭远程修正** | 保持自然滚动手感 | 停止 UU 专用方向修正和触控板调速 | 临时排查或恢复 UU 原生行为 |
+| **Mac 控制 Windows** | 预设反向，符合 Windows 滚轮习惯 | 预设不反向，降速 | Mac 作为主控端连接 Windows |
+| **Mac 控制 Mac** | 预设不反向 | 预设不反向，降速 | Mac 作为主控端连接另一台 Mac |
+| **关闭远程修正** | 不反向 | 不处理 | 临时排查或恢复 UU 原生行为 |
 
-设置应用会同时处理：
+三种模式都**不会**修改系统的“自然滚动”设置，也不会改动 Mos 的平滑、速度等全局参数。本机其他应用的滚动手感保持不变。
 
-- macOS 系统自然滚动设置
-- Mos 本机方向补偿
-- UU 鼠标独立规则
-- UU 触控板方向与速度
-- Mos / UUTrackpadFix 后台任务状态
+如果系统关闭了自然滚动，鼠标滚轮本来就是 Windows 方向，“Mac 控制 Windows”模式不会再反向。
 
 ## 快速安装
 
-### 方法一：下载 Release
-
-1. 打开 [Releases](https://github.com/FlynnAIwang/uu-remote-mac-scroll-fix/releases)。
-2. 下载 `UURemoteScrollSettings-macOS.zip`。
-3. 解压后将 `UURemoteScrollSettings.app` 放入 `/Applications`。
-4. 首次使用前，先运行仓库中的 `setup.command` 安装基础组件。
-5. 如果 macOS 阻止运行：右键应用 → **打开** → 再次点击 **打开**。
-
-### 方法二：克隆仓库并一键安装
+### 方法一：克隆仓库并一键安装（推荐）
 
 ```bash
 git clone https://github.com/FlynnAIwang/uu-remote-mac-scroll-fix.git
@@ -42,59 +30,89 @@ cd uu-remote-mac-scroll-fix
 ./setup.command
 ```
 
-安装完成后会生成：
+脚本会：
 
-```text
-/Applications/Mos.app
-/Applications/UUTrackpadFix.app
-/Applications/UURemoteScrollSettings.app
-```
+1. 本机没有 Mos 或版本低于 4.2.1 时，下载并校验 Mos 4.2.1；已有更新的版本不会被降级。
+2. 从源码编译 `UUTrackpadFix.app` 和 `UURemoteScrollSettings.app` 并安装到 `/Applications`。
+3. 启用一个远程模式（首次安装默认“Mac 控制 Windows”，之后沿用上次的选择）。
+
+也可以直接指定模式：`./setup.command mac`。
+
+### 方法二：下载 Release
+
+1. 自行安装 [Mos](https://github.com/Caldis/Mos/releases) 并打开一次。
+2. 打开 [Releases](https://github.com/FlynnAIwang/uu-remote-mac-scroll-fix/releases)，下载 `UURemoteScrollSettings-macOS.zip`。
+3. 解压后把 `UURemoteScrollSettings.app` 和 `UUTrackpadFix.app` 都放入 `/Applications`。
+4. 打开 `UURemoteScrollSettings.app`，点击要用的模式。
+
+Release 里的应用使用临时签名，会被 Gatekeeper 拦截。首次打开后到 **系统设置 → 隐私与安全性** 页面底部点击 **仍要打开**（macOS 15 起，右键“打开”已不能绕过拦截）。介意的话请用方法一从源码编译。
+
+### 授权辅助功能
+
+`Mos` 和 `UU远程触控板调速器` 首次运行都需要在 **系统设置 → 隐私与安全性 → 辅助功能** 中授权。设置应用本身不需要这个权限；调速器未授权时，设置应用会显示提示和跳转按钮。
 
 ## 使用设置应用
 
-1. 打开 `/Applications/UURemoteScrollSettings.app`。
-2. 选择模式：
-   - **Mac 控制 Windows**
-   - **Mac 控制 Mac**
-   - **关闭远程修正**
-3. 点击对应模式卡片即可一键启用。
-4. 应用会自动重启 Mos 和 UUTrackpadFix。
-5. 切换到 UU 远程窗口测试滚动方向。
+1. 打开 `/Applications/UURemoteScrollSettings.app`（在访达和程序坞里显示为“UU远程滚动助手”）。
+2. 点击模式卡片即可启用，应用会重启 Mos 并启动或停止触控板调速器。
+3. 用“UU 触控板速度”滑块调整倍率（默认 ×0.18），松开后立即生效。
+4. 切换到 UU 远程窗口测试滚动方向。方向不对时，用“鼠标滚轮反向”“触控板反向”两个开关单独调整；它们只作用于 UU 窗口。
 
-设置应用本身不需要辅助功能权限；`Mos` 和 `UUTrackpadFix` 首次运行时需要用户在 **系统设置 → 隐私与安全性 → 辅助功能** 中授权。
+模式卡片是预设：点卡片会把两个方向开关恢复为该模式的默认值。
+
+**开机自启**开关（默认开启）决定登录后触控板调速器是否自动启动。关闭后，每次登录需要打开应用点一下“立即启用”。这个开关不会改动 Mos 的登录启动设置；如果 Mos 没有设置登录时启动，应用会给出提示。
+
+点击模式卡片时应用做的事：
+
+- 先检查 Mos、UU 远程、调速器是否都已安装，缺任何一项都不会改动配置。
+- 备份 Mos 配置到 `~/Library/Application Support/UURemoteScrollSettings/Mos 配置备份/`（保留最近 10 份）。
+- 退出 Mos → 只替换 Mos 分应用规则中 UU 远程的 3 条，其余应用的规则原样保留 → 重新启动 Mos。
+- “Mac 控制 Windows”需要 Mos 的全局“反向滚动”处于开启状态（Mos 默认开启）；如果你关掉了它，应用会重新打开并给出提示。
+- 生成或删除调速器的 LaunchAgent。“关闭远程修正”会删除它，重新登录后也不会再启动。
+
+## 命令行
+
+设置应用的可执行文件同时是命令行工具，安装脚本用的就是它：
+
+```bash
+/Applications/UURemoteScrollSettings.app/Contents/MacOS/UURemoteScrollSettings --status
+```
+
+```bash
+/Applications/UURemoteScrollSettings.app/Contents/MacOS/UURemoteScrollSettings --apply windows
+```
+
+```bash
+/Applications/UURemoteScrollSettings.app/Contents/MacOS/UURemoteScrollSettings --scale 0.25
+```
+
+```bash
+/Applications/UURemoteScrollSettings.app/Contents/MacOS/UURemoteScrollSettings --mouse-reverse on
+```
+
+```bash
+/Applications/UURemoteScrollSettings.app/Contents/MacOS/UURemoteScrollSettings --trackpad-reverse on
+```
+
+```bash
+/Applications/UURemoteScrollSettings.app/Contents/MacOS/UURemoteScrollSettings --launch-at-login off
+```
 
 ## 工作原理
 
-1. 安装并校验 Mos 4.2.1。
-2. 本机普通应用使用 Mos 丝滑滚动，并通过方向补偿保持自然滚动手感。
-3. 精确匹配 UU 远程应用包、主进程和服务进程。
-4. UU 鼠标使用原始滚轮事件，避免 UU 忽略 Mos 合成事件。
-5. 根据当前模式切换 UU 鼠标独立反向规则。
-6. 本地编译轻量辅助程序，只处理发往 UU 窗口的连续触控板事件。
-7. 使用用户级 LaunchAgent 保持 Mos 和 UUTrackpadFix 登录后自动运行。
-8. 设置应用只修改用户级偏好设置和 LaunchAgent，不安装系统扩展。
+1. Mos 负责鼠标滚轮：UU 远程有独立的分应用规则，关闭平滑（UU 会忽略 Mos 合成的平滑事件）并按模式决定是否反向。
+2. Mos 不处理触控板事件，所以由本地编译的 `UUTrackpadFix` 监听发往 UU 窗口的连续滚动事件并缩放。
+3. `UUTrackpadFix` 由用户级 LaunchAgent 保持运行，日志在 `~/Library/Logs/UUTrackpadFix.log`。开机自启开启时，LaunchAgent 放在 `~/Library/LaunchAgents`；关闭时放在应用自己的目录里，只在本次登录期间加载。
+4. Mos 自身不由本项目守护；开机自启请在 Mos 偏好设置里开启“登录时启动”。
+5. 所有改动都在用户级偏好设置和 LaunchAgent 内，不安装系统扩展。
 
 ## 安全措施
 
-- 固定 Mos 版本及 Release 文件大小。
-- 校验 Mos Release 的 SHA-256。
-- 校验 Apple Gatekeeper。
-- 校验 Mos 开发者 Team ID。
-- 替换旧版 Mos 前自动备份。
+- 固定 Mos 版本，校验 Release 文件大小、SHA-256、Apple Gatekeeper 和开发者 Team ID；镜像线路同样必须通过这些校验。
+- 替换旧版 Mos 前把旧版移到 `~/Library/Application Support/UURemoteScrollSettings/旧版应用备份/`。
 - 修改 Mos 偏好设置前自动备份。
-- `UUTrackpadFix` 和设置应用均从仓库源码在本机编译。
-- 设置应用不联网、不读取键盘内容、不记录鼠标位置。
-
-## 自定义触控板速度
-
-默认倍率为 `0.18`。编辑 `com.user.uuremote.trackpadfix.plist`：
-
-```xml
-<key>UU_TRACKPAD_SCALE</key>
-<string>0.18</string>
-```
-
-数值越小，滚动越慢。建议范围：`0.10`–`0.35`。修改后重新运行 `setup.command`。
+- 方法一中，`UUTrackpadFix` 和设置应用均从仓库源码在本机编译。
+- 两个应用都不联网；`UUTrackpadFix` 只监听滚轮事件，不读取键盘内容、不记录鼠标位置。
 
 ## 本地构建
 
@@ -102,41 +120,38 @@ cd uu-remote-mac-scroll-fix
 ./build-app.command
 ```
 
-构建结果：
+构建结果（arm64 + x86_64 通用二进制，最低 macOS 12）：
 
 ```text
 build/UURemoteScrollSettings.app
+build/UUTrackpadFix.app
 ```
 
-仓库在 `docs/release-workflow.yml` 中提供可选的 GitHub Actions 工作流。由于当前推送凭证没有 `workflow` scope，如需启用自动构建，可将该文件复制到 `.github/workflows/release.yml` 后通过 GitHub 网页提交。
+应用图标由 `tools/make-icon.swift` 用代码绘制。修改后运行 `xcrun swift tools/make-icon.swift UURemoteScrollSettings.app.src/AppIcon.icns` 重新生成。
+
+仓库在 `docs/release-workflow.yml` 中提供可选的 GitHub Actions 工作流。如需启用自动构建，将该文件复制到 `.github/workflows/release.yml` 后提交。
 
 ## 卸载与恢复
 
-停止后台任务：
-
-```bash
-launchctl bootout "gui/$(id -u)/com.user.uuremote.mos"
-launchctl bootout "gui/$(id -u)/com.user.uuremote.trackpadfix"
-```
-
-删除：
+1. 在设置应用中点击 **关闭远程修正**（停止调速器并删除它的 LaunchAgent）。
+2. 打开 Mos 偏好设置 → 应用，删除 3 条 UU 远程规则；或从 `Mos 配置备份` 里恢复之前的配置。
+3. 删除：
 
 ```text
-~/Library/LaunchAgents/com.user.uuremote.mos.plist
-~/Library/LaunchAgents/com.user.uuremote.trackpadfix.plist
-/Applications/Mos.app
 /Applications/UUTrackpadFix.app
 /Applications/UURemoteScrollSettings.app
+~/Library/Application Support/UURemoteScrollSettings
+~/Library/Logs/UUTrackpadFix.log
 ```
 
-最后在 **系统设置 → 鼠标** 中恢复你原来的“自然滚动”选项。
+Mos 是独立的应用，是否保留由你决定。
 
 ## 已知限制
 
-- UU 远程 4.35.0 对 Mos 合成平滑滚轮事件的兼容性不稳定，因此 UU 窗口内鼠标使用原始滚轮事件。
-- `UUTrackpadFix` 首次运行需要辅助功能权限。
+- UU 远程对 Mos 合成的平滑滚轮事件兼容性不稳定，因此 UU 窗口内鼠标使用原始滚轮事件。
+- Magic Mouse 的滚动特征与触控板一致，会被当作触控板处理（降速、不反向）。
+- `UUTrackpadFix` 使用临时签名：源码变化并重新安装后，需要重新授权辅助功能。安装脚本在源码未变化时会保留已安装的版本，避免无谓的重新授权。
 - UU 或 Mos 更新后若修改进程结构，可能需要更新匹配路径。
-- 设置应用当前使用本机临时签名；从 GitHub 下载后如被 Gatekeeper 拦截，请右键打开。
 
 ## 贡献与反馈
 
@@ -145,7 +160,7 @@ launchctl bootout "gui/$(id -u)/com.user.uuremote.trackpadfix"
 - macOS 版本与芯片类型
 - UU 远程版本
 - 鼠标或触控板型号
-- 当前使用的模式
+- 当前使用的模式，以及 `--status` 的输出
 - 具体表现：方向错误、速度异常或无响应
 
 ## License

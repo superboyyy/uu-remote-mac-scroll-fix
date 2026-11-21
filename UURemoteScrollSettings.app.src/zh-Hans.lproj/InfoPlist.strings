@@ -1,0 +1,4 @@
+/* 访达、程序坞和菜单栏里显示的应用名称。
+   Info.plist 里的 CFBundleDisplayName 必须与 .app 的文件名一致，访达才会采用这里的名称。 */
+"CFBundleDisplayName" = "UU远程滚动助手";
+"CFBundleName" = "UU远程滚动助手";
