@@ -14,7 +14,7 @@ enum RemoteMode: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .windows: return "Mac 控制 Windows"
         case .mac: return "Mac 控制 Mac"
-        case .off: return "关闭远程修正"
+        case .off: return "远程修正已关闭"
         }
     }
 
@@ -101,7 +101,7 @@ enum AppError: LocalizedError {
         case .trackpadDidNotStart(let detail):
             return "触控板调速器没有启动成功。\(detail)"
         case .noActiveMode:
-            return "请先启用“Mac 控制 Windows”或“Mac 控制 Mac”模式，再调整滚动方向。"
+            return "请先打开总开关，再调整滚动方向。"
         case .commandFailed(let command, let detail):
             let suffix = detail.isEmpty ? "" : "：\(detail)"
             return "命令执行失败（\(command)）\(suffix)"
@@ -200,6 +200,26 @@ enum ModeEngine {
         return (mode, result)
     }
 
+    /// 总开关。关闭等同于“关闭远程修正”；重新打开时恢复上次启用的模式和两个方向开关。
+    static func setEnabled(_ enabled: Bool) throws -> ApplyResult {
+        guard enabled else {
+            return try applyConfiguration(mode: .off, mouseReverse: false, trackpadReverse: false)
+        }
+        // 开机自启关闭、重新登录后：配置都还在，只需要把调速器启动起来。
+        if readState().pendingMode != nil {
+            try resume()
+            return ApplyResult()
+        }
+        // 从没启用过任何模式时，用 Windows 模式的预设。
+        guard let mode = lastActiveMode() else { return try apply(.windows) }
+        return try applyConfiguration(
+            mode: mode,
+            mouseReverse: savedFlag(mouseReverseKey)
+                ?? mode.wantsMouseReverse(naturalScrolling: naturalScrolling()),
+            trackpadReverse: savedFlag(trackpadReverseKey) ?? false
+        )
+    }
+
     /// “鼠标滚轮反向”开关：只改 Mos 里的 UU 规则，不动调速器。
     static func setMouseReverse(_ reverse: Bool) throws -> ApplyResult {
         guard let mode = readState().mode, mode.usesTrackpadFix else { throw AppError.noActiveMode }
@@ -259,9 +279,16 @@ enum ModeEngine {
             stopTrackpadAgent()
         }
 
+        if mode.usesTrackpadFix {
+            // 记住最近一次启用的模式和方向；总开关重新打开时按这些恢复。
+            saveLastActiveMode(mode)
+            saveFlag(mouseReverseKey, mouseReverse)
+            saveFlag(trackpadReverseKey, trackpadReverse)
+        } else if let previous = savedMode(), previous.usesTrackpadFix {
+            // 关闭时不清掉方向开关的选择，只记下关闭前用的是哪个模式。
+            saveLastActiveMode(previous)
+        }
         saveMode(mode)
-        saveFlag(mouseReverseKey, mouseReverse)
-        saveFlag(trackpadReverseKey, trackpadReverse)
         return result
     }
 
@@ -647,6 +674,20 @@ enum ModeEngine {
         return RemoteMode(rawValue: raw)
     }
 
+    private static func lastActiveMode() -> RemoteMode? {
+        CFPreferencesAppSynchronize(settingsDomain)
+        guard let raw = CFPreferencesCopyAppValue("lastActiveMode" as CFString, settingsDomain) as? String,
+              let mode = RemoteMode(rawValue: raw), mode.usesTrackpadFix else {
+            return nil
+        }
+        return mode
+    }
+
+    private static func saveLastActiveMode(_ mode: RemoteMode) {
+        CFPreferencesSetAppValue("lastActiveMode" as CFString, mode.rawValue as CFString, settingsDomain)
+        CFPreferencesAppSynchronize(settingsDomain)
+    }
+
     private static func saveMode(_ mode: RemoteMode) {
         CFPreferencesSetAppValue("selectedMode" as CFString, mode.rawValue as CFString, settingsDomain)
         CFPreferencesAppSynchronize(settingsDomain)
@@ -714,6 +755,7 @@ enum CommandLineInterface {
     static let usage = """
     用法：
       UURemoteScrollSettings --status
+      UURemoteScrollSettings --enabled <on|off>
       UURemoteScrollSettings --apply <windows|mac|off|default>
       UURemoteScrollSettings --scale <0.05–1.0>
       UURemoteScrollSettings --mouse-reverse <on|off>
@@ -742,7 +784,7 @@ enum CommandLineInterface {
                 } else {
                     return fail(usage)
                 }
-                print("已启用：\(mode.title)")
+                print(mode.usesTrackpadFix ? "已启用：\(mode.title)" : "已关闭远程修正")
                 result.notes.forEach { print("提示：\($0)") }
                 printState(ModeEngine.readState())
                 return 0
@@ -765,6 +807,15 @@ enum CommandLineInterface {
                 return 0
             } catch {
                 return fail("启用失败：\(error.localizedDescription)")
+            }
+        case "--enabled":
+            guard arguments.count == 2, ["on", "off"].contains(arguments[1]) else { return fail(usage) }
+            do {
+                try ModeEngine.setEnabled(arguments[1] == "on").notes.forEach { print("提示：\($0)") }
+                printState(ModeEngine.readState())
+                return 0
+            } catch {
+                return fail("设置失败：\(error.localizedDescription)")
             }
         case "--mouse-reverse", "--trackpad-reverse", "--launch-at-login":
             guard arguments.count == 2, ["on", "off"].contains(arguments[1]) else { return fail(usage) }
@@ -798,6 +849,7 @@ enum CommandLineInterface {
 
     private static func printState(_ state: StateSnapshot) {
         func text(_ value: Bool) -> String { value ? "yes" : "no" }
+        print("enabled=\(text(state.mode?.usesTrackpadFix == true))")
         print("mode=\(state.mode?.rawValue ?? "unknown")")
         print("natural_scrolling=\(text(state.naturalScrolling))")
         print("mos_installed=\(text(state.mosInstalled))")
@@ -830,7 +882,7 @@ final class AppModel: ObservableObject {
     @Published var state = StateSnapshot()
     @Published var scale = ModeEngine.defaultScale
     @Published var busy = false
-    @Published var message = "请选择要启用的远程模式。"
+    @Published var message = "打开总开关，或直接选择一个远程模式。"
     @Published var errorMessage: String?
     @Published var notes: [String] = []
 
@@ -880,6 +932,27 @@ final class AppModel: ObservableObject {
                 errorMessage = "设置失败：\(error.localizedDescription)"
             }
             await reloadState()
+            busy = false
+        }
+    }
+
+    func setEnabled(_ enabled: Bool) {
+        guard !busy, enabled != (state.mode?.usesTrackpadFix == true) else { return }
+        busy = true
+        errorMessage = nil
+        notes = []
+        message = enabled ? "正在启用远程修正…" : "正在关闭远程修正…"
+        Task {
+            do {
+                let result = try await runInBackground { try ModeEngine.setEnabled(enabled) }
+                notes = result.notes
+                await reloadState()
+                message = enabled ? "已启用：\(state.mode?.title ?? "远程修正")" : "远程修正已关闭。"
+            } catch {
+                errorMessage = "设置失败：\(error.localizedDescription)"
+                message = "设置失败，请查看下方提示。"
+                await reloadState()
+            }
             busy = false
         }
     }
@@ -1087,7 +1160,20 @@ struct ContentView: View {
             Spacer()
 
             ProgressView()
+                .controlSize(.small)
                 .opacity(model.busy ? 1 : 0)
+
+            // 总开关：关闭后停止全部远程修正，重新打开时恢复上次的模式和方向设置。
+            Toggle(isOn: Binding(
+                get: { model.state.mode?.usesTrackpadFix == true },
+                set: { model.setEnabled($0) }
+            )) {
+                Text("总开关")
+                    .font(.system(size: 13, weight: .medium))
+            }
+            .toggleStyle(.switch)
+            .controlSize(.large)
+            .disabled(model.busy)
         }
         .padding(20)
         .background(.bar)
@@ -1095,7 +1181,8 @@ struct ContentView: View {
 
     private var modeCards: some View {
         VStack(spacing: 12) {
-            ForEach(RemoteMode.allCases) { mode in
+            // “关闭”不再是一张卡片，由标题栏的总开关控制。
+            ForEach(RemoteMode.allCases.filter(\.usesTrackpadFix)) { mode in
                 let active = model.state.mode == mode
                 Button {
                     model.apply(mode)
@@ -1256,7 +1343,7 @@ struct ContentView: View {
 
                 Text(active
                      ? "只影响 UU 窗口，本机其他应用不变。点模式卡片会把这两个开关恢复为该模式的预设。"
-                     : "启用“Mac 控制 Windows”或“Mac 控制 Mac”后才能调整方向。")
+                     : "打开总开关后才能调整方向。")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }

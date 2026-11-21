@@ -14,9 +14,9 @@
 |---|---|---|---|
 | **Mac 控制 Windows** | 预设反向，符合 Windows 滚轮习惯 | 预设不反向，降速 | Mac 作为主控端连接 Windows |
 | **Mac 控制 Mac** | 预设不反向 | 预设不反向，降速 | Mac 作为主控端连接另一台 Mac |
-| **关闭远程修正** | 不反向 | 不处理 | 临时排查或恢复 UU 原生行为 |
+| **总开关关闭** | 不反向 | 不处理 | 临时排查或恢复 UU 原生行为 |
 
-三种模式都**不会**修改系统的“自然滚动”设置，也不会改动 Mos 的平滑、速度等全局参数。本机其他应用的滚动手感保持不变。
+无论哪种状态都**不会**修改系统的“自然滚动”设置，也不会改动 Mos 的平滑、速度等全局参数。本机其他应用的滚动手感保持不变。
 
 如果系统关闭了自然滚动，鼠标滚轮本来就是 Windows 方向，“Mac 控制 Windows”模式不会再反向。
 
@@ -60,6 +60,8 @@ Release 里的应用使用临时签名，会被 Gatekeeper 拦截。首次打开
 
 模式卡片是预设：点卡片会把两个方向开关恢复为该模式的默认值。
 
+标题栏右侧的**总开关**用来整体启用或关闭远程修正。关闭后停止触控板调速、UU 窗口内鼠标滚轮不再反向；重新打开时恢复关闭前的模式和两个方向开关。
+
 **开机自启**开关（默认开启）决定登录后触控板调速器是否自动启动。关闭后，每次登录需要打开应用点一下“立即启用”。这个开关不会改动 Mos 的登录启动设置；如果 Mos 没有设置登录时启动，应用会给出提示。
 
 点击模式卡片时应用做的事：
@@ -68,7 +70,7 @@ Release 里的应用使用临时签名，会被 Gatekeeper 拦截。首次打开
 - 备份 Mos 配置到 `~/Library/Application Support/UURemoteScrollSettings/Mos 配置备份/`（保留最近 10 份）。
 - 退出 Mos → 只替换 Mos 分应用规则中 UU 远程的 3 条，其余应用的规则原样保留 → 重新启动 Mos。
 - “Mac 控制 Windows”需要 Mos 的全局“反向滚动”处于开启状态（Mos 默认开启）；如果你关掉了它，应用会重新打开并给出提示。
-- 生成或删除调速器的 LaunchAgent。“关闭远程修正”会删除它，重新登录后也不会再启动。
+- 生成或删除调速器的 LaunchAgent。关闭总开关会删除它，重新登录后也不会再启动。
 
 ## 命令行
 
@@ -76,6 +78,10 @@ Release 里的应用使用临时签名，会被 Gatekeeper 拦截。首次打开
 
 ```bash
 /Applications/UURemoteScrollSettings.app/Contents/MacOS/UURemoteScrollSettings --status
+```
+
+```bash
+/Applications/UURemoteScrollSettings.app/Contents/MacOS/UURemoteScrollSettings --enabled off
 ```
 
 ```bash
@@ -133,7 +139,7 @@ build/UUTrackpadFix.app
 
 ## 卸载与恢复
 
-1. 在设置应用中点击 **关闭远程修正**（停止调速器并删除它的 LaunchAgent）。
+1. 在设置应用中关闭**总开关**（停止调速器并删除它的 LaunchAgent）。
 2. 打开 Mos 偏好设置 → 应用，删除 3 条 UU 远程规则；或从 `Mos 配置备份` 里恢复之前的配置。
 3. 删除：
 

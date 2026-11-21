@@ -27,9 +27,10 @@
 
 - 设置应用内可调整触控板倍率。
 - 调速器等待辅助功能授权时，设置应用显示提示和跳转按钮。
-- 命令行：`--status`、`--apply <模式>`、`--scale <倍率>`、`--mouse-reverse <on|off>`、`--trackpad-reverse <on|off>`、`--launch-at-login <on|off>`、`--resume`。
+- 命令行：`--status`、`--apply <模式>`、`--scale <倍率>`、`--mouse-reverse <on|off>`、`--trackpad-reverse <on|off>`、`--launch-at-login <on|off>`、`--enabled <on|off>`、`--resume`。
 - 设置应用有了图标和中文名称“UU远程滚动助手”。
 - 新增“鼠标滚轮反向”“触控板反向”两个开关，可在模式预设之上单独调整 UU 窗口内的方向。
+- 新增总开关：一键启用或关闭全部远程修正，重新打开时恢复关闭前的模式和方向设置；原来的“关闭远程修正”卡片由它取代。
 - 新增“开机自启”开关，控制登录后触控板调速器是否自动启动；Mos 未设置登录时启动时给出提示。
 - Release 包同时包含 `UUTrackpadFix.app`。
 
